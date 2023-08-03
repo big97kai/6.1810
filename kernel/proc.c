@@ -146,6 +146,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->mask = 0;
   return p;
 }
 
@@ -168,6 +169,7 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->mask = 0;
   p->state = UNUSED;
 }
 
@@ -296,6 +298,8 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // copy mask
+  np->mask = p->mask;
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -680,4 +684,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+uint64
+number_of_pro(void){
+  struct proc *p;
+  uint64 n_o_p = 0;
+  for(p = proc; p < &proc[NPROC]; p++){
+      if(p->state != UNUSED)
+        n_o_p++;
+    }
+  return n_o_p;
 }

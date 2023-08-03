@@ -1,0 +1,6 @@
+usertrap
+sys_exec
+super
+lw	a3,0(zero) a3
+map to 0 is not allowed to load
+initcode 1

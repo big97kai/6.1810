@@ -5,6 +5,8 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
+#include "kalloc.h"
 
 uint64
 sys_exit(void)
@@ -77,6 +79,36 @@ sys_kill(void)
 
   argint(0, &pid);
   return kill(pid);
+}
+
+uint64
+sys_trace(void){
+  int mask;
+
+  argint(0, &mask);
+  struct proc *p = myproc();
+  p->mask = mask;
+
+  return 0;
+}
+
+uint64
+sys_sysinfo(void){
+  uint64 addr;
+  argaddr(0, &addr);
+
+  struct proc *p = myproc();
+
+
+  struct sysinfo sysinfo;
+
+  sysinfo.freemem = free_mem();
+  sysinfo.nproc = number_of_pro();
+
+  if(copyout(p->pagetable, addr, (char *)&sysinfo, sizeof(sysinfo)) < 0)
+    return -1;
+
+  return 0;
 }
 
 // return how many clock tick interrupts have occurred
