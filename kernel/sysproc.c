@@ -70,14 +70,39 @@ sys_sleep(void)
 }
 
 
-#ifdef LAB_PGTBL
 int
 sys_pgaccess(void)
 {
-  // lab pgtbl: your code here.
+  uint64 va;
+  int pagenum;
+  uint64 abitsaddr;
+  argaddr(0, &va);
+  argint(1, &pagenum);
+  argaddr(2, &abitsaddr);
+  struct proc *proc = myproc();
+  uint64 mask = 0;
+
+  if(pagenum > 64) return -1;
+
+  for(int i=0; i<64; i++){
+
+    pte_t *pte = walk(proc->pagetable, va+ i * PGSIZE, 0);
+    if(*pte == 0){
+
+      panic("No page!");
+    }else{
+
+      if(*pte & PTE_A){
+
+        mask |= (1 << i);
+        *pte &= ~PTE_A;
+      }
+    }
+  }
+  if (copyout(proc->pagetable, abitsaddr, (char *)&mask, sizeof(mask)) < 0)
+    panic("sys_pgacess copyout error");
   return 0;
 }
-#endif
 
 uint64
 sys_kill(void)
