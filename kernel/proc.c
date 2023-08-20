@@ -131,7 +131,13 @@ found:
     release(&p->lock);
     return 0;
   }
-
+    // Allocate a trapframe page.
+  if((p->saveTrapframe = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -146,6 +152,10 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->passed_time = 0;
+  p->handler_address = 0;
+  p->alarm_time = 0;
+  p->have_return = 1;
   return p;
 }
 
@@ -169,6 +179,13 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  if(p->saveTrapframe)
+    kfree((void*)p->saveTrapframe);
+  p->passed_time = 0;
+  p->handler_address = 0;
+  p->alarm_time = 0;
+  p->have_return = 0;
 }
 
 // Create a user page table for a given process, with no user memory,

@@ -68,6 +68,7 @@ void __attribute__ ((noinline)) foo(int i, int *j) {
     write(2, ".", 1);
   }
   *j += 1;
+
 }
 
 //
