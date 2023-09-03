@@ -18,6 +18,19 @@ struct context {
   uint64 s11;
 };
 
+#define NVMA        (16)
+
+struct vma {
+  int valid;      // 0 valid, 1 invalid
+  uint64 addr;    // Virtual address at which to map the file
+  int length;     // Number of bytes to map, 0 mean invalid map
+  int prot;       // Permission: PROT_READ or PROT_WRITE or both
+  int flags;      // MAP_SHARED(meaning that modifications to the mapped memory 
+                  // should be written back to the file) or MAP_PRIVATE(should not)
+  int off;        // offset
+  struct file* f; // file descriptor
+};
+
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
@@ -95,6 +108,8 @@ struct proc {
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 
+  struct vma vmas[NVMA];
+  
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)

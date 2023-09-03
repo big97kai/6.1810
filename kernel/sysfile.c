@@ -503,3 +503,142 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr;
+  int length, prot, flags, fd, offset, i;
+  struct file *f;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+  argint(2, &prot);
+  argint(3, &flags);
+  argfd(4, &fd, &f);
+  argint(5, &offset);
+
+  if (length == 0) {
+    return -1;
+  }
+
+  if ((!f->readable && (prot & PROT_READ)) ||
+      ((!f->writable) && (prot & PROT_WRITE) && !(flags & MAP_PRIVATE))) {
+    return -1;
+  }
+  length = PGROUNDUP(length);
+
+  uint64 vaend = MAXVA - 2 * PGSIZE;
+  struct proc *p = myproc();
+
+  for(i=0; i<NVMA; i++){
+    struct vma *vsingle = &(p->vmas[i]);
+    if(vsingle->valid){
+
+      break;
+    }else if(vsingle->addr < vaend){
+
+      vaend = PGROUNDDOWN(vsingle->addr);
+    }
+  }
+
+  struct vma *v = &(p->vmas[i]);
+
+  v->valid = 1;
+  v->addr = vaend - length;
+  v->length = length;
+  v->prot = prot;
+  v->flags = flags;
+  v->f = f;
+  v->off = offset;
+
+  filedup(f);
+  return v->addr;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 addr;
+  int length;
+
+  argaddr(0, &addr);
+  argint(1, &length);
+
+  if (length == 0) {
+    return -1;
+  }
+
+  struct proc *p = myproc();
+  struct vma *v = 0;
+  for (int i = 0; i < NVMA; i++) {
+    struct vma *vsingle = &p->vmas[i];
+    if (vsingle->valid == 1 && addr >= vsingle->addr && addr < vsingle->addr + vsingle->length) {
+      v = vsingle;
+    }
+  }
+  if (v == 0) {
+    return -1;
+  }
+  // skip hole
+  if(addr > v->addr && addr + length < v->addr + v->length) {
+    return -1; 
+  }
+
+  uint64 addr_aligned = addr;
+  if(addr > v->addr) {
+    addr_aligned = PGROUNDUP(addr);
+  }
+
+  int nunmap = length - (addr_aligned - addr); // nbytes to unmap
+  if(nunmap < 0)
+    nunmap = 0;
+
+  vmaunmap(p->pagetable, addr_aligned, nunmap, v); // custom memory page unmap routine for mmapped pages.
+  if(addr <= v->addr && addr + length > v->addr) { // unmap at the beginning
+    v->off += addr + length - v->addr;
+    v->addr = addr + length;
+  }
+  v->length -= length;
+
+  if(v->length <= 0) {
+    fileclose(v->f);
+    v->valid = 0;
+  }
+
+  return 0;
+}
+
+int 
+vmalazy(uint64 va) {
+  struct proc *p = myproc();
+  // search the suitable vma slot
+  struct vma *v = 0;
+  for (int i = 0; i < NVMA; i++) {
+    struct vma *vv = &p->vmas[i];
+    if (vv->valid == 1 && va >= vv->addr && va < vv->addr + vv->length) {
+      v = vv;
+    }
+  }
+  if (v == 0)
+    return -1;
+
+  // allocate physical page
+  void *pa = kalloc();
+  if(pa == 0) {
+    panic("usertrap(): kalloc");
+  }
+  memset(pa, 0, PGSIZE);
+
+  begin_op();
+  ilock(v->f->ip);
+  readi(v->f->ip, 0, (uint64)pa, v->off + PGROUNDDOWN(va - v->addr), PGSIZE); //copy a page of the file from the disk
+  iunlock(v->f->ip);
+  end_op();
+
+  if(mappages(p->pagetable, va, PGSIZE, (uint64)pa, PTE_U | (v->prot << 1)) < 0) {
+    panic("pagefault map error");
+  }
+
+  return 0;
+}

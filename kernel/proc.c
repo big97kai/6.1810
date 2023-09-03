@@ -121,6 +121,9 @@ allocproc(void)
   }
   return 0;
 
+  for(int i = 0;i < NVMA; i++) {
+    p->vmas[i].valid = 0;
+  }
 found:
   p->pid = allocpid();
   p->state = USED;
@@ -169,6 +172,11 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
+  for(int i = 0; i < NVMA; i++) {
+    struct vma *v = &p->vmas[i];
+    vmaunmap(p->pagetable, v->addr, v->length, v);
+  }
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -308,6 +316,15 @@ fork(void)
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
 
+
+  for(i = 0; i < NVMA; i++) {
+    struct vma *v = &p->vmas[i];
+    if(v->valid) {
+      np->vmas[i] = *v;
+      filedup(v->f);
+    }
+  }
+  
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
